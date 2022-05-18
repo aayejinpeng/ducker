@@ -3,6 +3,8 @@
 #include<vector>
 #include<cstdlib>
 #include<cstdio>
+#include<fstream>
+#include<sstream>
 #include"ducker.h"
 using namespace std;
 
@@ -52,12 +54,15 @@ struct command
 {
   string name;
   string info;
+  string useage;
   void* fuc;
 };
-
+int container_conter; //最大255，不能申请超过255个，小bug可以操作
 vector<command>commands_list = {
-  {"help","Display ducker's commands infomation",(void *)help},
-  {"images","List images",(void *)images}
+  {"help","Display ducker's commands infomation","",(void *)help},
+  {"images","List images","",(void *)images},
+  {"crate","Create a new container","crate [image] [container]",(void *)crate},
+  {"rm","Remove one container","rm [container]",(void *)rm}
 };
 void help()
 {
@@ -71,8 +76,86 @@ void images()
 {
   system("ls images");
 }
+void crate(int argc, char *argv[])
+{
+  if (argc == 4)
+  {
+    string image = argv[2];
+    string container = argv[3];
+    string tmpstr;
+    // overlay文件系统
+    tmpstr = "mkdir containers/"+container;
+    if(system(tmpstr.c_str())) return;
+    tmpstr = "mkdir containers/"+container+"/rwlayer";
+    if(system(tmpstr.c_str())) return;
+    tmpstr = "mkdir containers/"+container+"/overlaywork";
+    if(system(tmpstr.c_str())) return;
+    tmpstr = "mkdir containers/"+container+"/merged";
+    if(system(tmpstr.c_str())) return;
+    tmpstr = "sudo mount -t overlay overlay -o lowerdir=images/"+image+",upperdir=containers/"+container+"/rwlayer,workdir=containers/"+container+"/overlaywork containers/"+container+"/merged";
+    if(system(tmpstr.c_str())) return;
+    // dns配置
+    tmpstr = "cp /etc/resolv.conf containers/"+container+"/merged/etc/resolv.conf";
+    if(system(tmpstr.c_str())) return;
+
+    // init.sh
+    stringstream ss;
+    ss << "mount -t proc none /proc \n";
+    ss << "mount -t sysfs none /sys \n";
+    ss << "mount -t tmpfs none /tmp \n";
+    ss << "source /etc/profile \n";
+    ss << "export PS1=\"(" << container << " container) \\u:\\w\\$ \" \n";
+    ss << "ip addr add 10.0.3." << (container_conter+2) <<"/24 dev vethc-"<< (container_conter)<<" \n";
+    ss << "ip link set vethc-"<< (container_conter)<<" up \n";
+    ss << "ip route add default via 10.0.3.1 \n";
+    ss << "bash -l\n";
+    fstream file("./containers/"+container+"/merged/bin/container-init.sh",ios::out);
+    file << ss.str();
+    container_conter++;//bug
+  }else
+  {
+    cout << "crate [image] [container]" << endl;
+  }
+}
+void rm(int argc, char *argv[])
+{
+  if (argc == 3)
+  {
+    string container = argv[2];
+    string tmpstr;
+
+    tmpstr = "sudo umount containers/"+container+"/merged";
+    if(system(tmpstr.c_str())) return;
+    tmpstr = "sudo rm -r containers/"+container;
+    if(system(tmpstr.c_str())) return;
+  }else
+  {
+    cout << "rm [container]" << endl;
+  }
+}
+void ducker_init()
+{
+  fstream info_file("./ducker.info",ios::in);
+  string info_title;
+  if (!info_file.fail())
+  {
+    while(info_file>>info_title)
+    {
+      if (info_title == "container_conter")
+      {
+        info_file >> container_conter;
+      }
+    }
+  }
+}
+void ducker_info_save()
+{
+  fstream info_file("./ducker.info");
+  info_file << "container_conter " << container_conter << endl;
+}
 int main(int argc, char *argv[])
 {
+  ducker_init();
   if (argc == 1)
   {
     help();
@@ -86,7 +169,14 @@ int main(int argc, char *argv[])
     }else if (command == "images")
     {
       images();
+    }else if (command == "crate")
+    { 
+      crate(argc,argv);
     }
-    
+    else if (command == "rm")
+    { 
+      rm(argc,argv);
+    }
   }
+  ducker_info_save();
 }
