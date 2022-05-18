@@ -1,6 +1,9 @@
 #include<string>
 #include<iostream>
+#include<vector>
 #include"ducker.h"
+using namespace std;
+
 /*
   attach      Attach local standard input, output, and error streams to a running container
   build       Build an image from a Dockerfile
@@ -43,7 +46,39 @@
   version     Show the Docker version information
   wait        Block until one or more containers stop, then print their exit codes
 */
+struct command
+{
+  string name;
+  string info;
+  void* fuc;
+};
+
+vector<command>commands_list = {
+  {"help","Display ducker's commands infomation",(void *)help}
+
+};
+void help()
+{
+  for (size_t i = 0; i < commands_list.size(); i++)
+  {
+    cout<< commands_list[i].name << '\t' << commands_list[i].info << endl;
+  }
+  
+}
 int main(int argc, char *argv[])
 {
+  if (argc == 1)
+  {
+    help();
+  }
+  else if(argc >= 2)
+  {
+    string command = argv[1];
+    if (command == "help")
+    {
+      help();
+    }
     
+    
+  }
 }
