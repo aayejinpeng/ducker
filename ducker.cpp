@@ -98,8 +98,34 @@ void crate(int argc, char *argv[])
     tmpstr = "cp /etc/resolv.conf containers/"+container+"/merged/etc/resolv.conf";
     if(system(tmpstr.c_str())) return;
 
-    // init.sh
+    // 网络设置
     stringstream ss;
+    ss << "sudo ip link add vethc-" <<container_conter << " type veth peer name vethc-br-" << container_conter;
+    
+    system(ss.str().c_str());
+    ss.str("");
+    ss << "sudo ip netns add container-"<< container <<"-netns";
+    
+    system(ss.str().c_str());
+    ss.str("");
+    ss << "sudo ip link set vethc-"<<container_conter<<" netns container-"<< container <<"-netns ";
+    
+    system(ss.str().c_str());
+    ss.str("");
+    ss << "sudo ip link add vethc-" <<container_conter << " type veth peer name vethc-br-" << container_conter;
+    system(ss.str().c_str());
+
+    ss.str("");
+    ss << "sudo brctl addif my-container-br vethc-br-"<<container_conter;
+    system(ss.str().c_str());
+
+    ss.str("");
+    ss << "sudo ip link set vethc-br-"<<container_conter<<" up";
+    system(ss.str().c_str());
+    // cgroup设置
+
+    // init.sh
+    ss.str("");
     ss << "mount -t proc none /proc \n";
     ss << "mount -t sysfs none /sys \n";
     ss << "mount -t tmpfs none /tmp \n";
@@ -111,6 +137,8 @@ void crate(int argc, char *argv[])
     ss << "bash -l\n";
     fstream file("./containers/"+container+"/merged/bin/container-init.sh",ios::out);
     file << ss.str();
+    tmpstr = "chmod +x ./containers/"+container+"/merged/bin/container-init.sh";
+    system(tmpstr.c_str());
     container_conter++;//bug
   }else
   {
@@ -146,7 +174,16 @@ void ducker_init()
         info_file >> container_conter;
       }
     }
+  }else
+  {
+    container_conter = 0;
+    system("sudo brctl addbr my-container-br ");
+    system("sudo ip addr add 10.0.3.1/24 dev my-container-br ");
   }
+  system("sudo ip link set my-container-br up ");
+  system("sudo iptables -t nat -A POSTROUTING -s 10.0.3.0/24 -j MASQUERADE ");
+  system("sudo iptables -A FORWARD -o my-container-br -j ACCEPT ");
+  system("sudo iptables -A FORWARD -i my-container-br -j ACCEPT");
 }
 void ducker_info_save()
 {
@@ -176,6 +213,10 @@ int main(int argc, char *argv[])
     else if (command == "rm")
     { 
       rm(argc,argv);
+    }
+    else
+    {
+      help();
     }
   }
   ducker_info_save();
