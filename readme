@@ -1,0 +1,5 @@
+mkdir build
+mkdir build/images
+mkdir build/containers
+tar -xf arch-docker-img.tar -C build/images/archlinux
+tar -xf centos.tar -C build/images/centos
