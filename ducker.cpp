@@ -61,8 +61,9 @@ int container_conter; //最大255，不能申请超过255个，小bug可以操�
 vector<command>commands_list = {
   {"help","Display ducker's commands infomation","",(void *)help},
   {"images","List images","",(void *)images},
-  {"crate","Create a new container","crate [image] [container]",(void *)crate},
-  {"rm","Remove one container","rm [container]",(void *)rm}
+  {"create","Create a new container","create [image] [container]",(void *)create},
+  {"rm","Remove one container","rm [container]",(void *)rm},
+  {"exec","Run a command in a running container","exec [container] [command...]",(void *)exec}
 };
 void help()
 {
@@ -76,7 +77,7 @@ void images()
 {
   system("ls images");
 }
-void crate(int argc, char *argv[])
+void create(int argc, char *argv[])
 {
   if (argc == 4)
   {
@@ -100,18 +101,18 @@ void crate(int argc, char *argv[])
     if(system(tmpstr.c_str())) return;
 
     // 网络设置
-    
+    ss.str("");
     ss << "sudo ip link add vethc-" <<container_conter << " type veth peer name vethc-br-" << container_conter;
-    
     system(ss.str().c_str());
+
     ss.str("");
     ss << "sudo ip netns add container-"<< container <<"-netns";
-    
     system(ss.str().c_str());
+
     ss.str("");
     ss << "sudo ip link set vethc-"<<container_conter<<" netns container-"<< container <<"-netns ";
-    
     system(ss.str().c_str());
+
     ss.str("");
     ss << "sudo ip link add vethc-" <<container_conter << " type veth peer name vethc-br-" << container_conter;
     system(ss.str().c_str());
@@ -162,12 +163,16 @@ void crate(int argc, char *argv[])
     file << ss.str();
     tmpstr = "chmod +x ./containers/"+container+"/merged/bin/container-init.sh";
     system(tmpstr.c_str());
-    container_conter++;//bug
 
-    
-  }else
+    cout << "container = " << container << "\nip = 10.0.3." << (container_conter+2) << "/24" << endl;
+    fstream id_file("./containers/"+container+"/id",ios::out);
+    id_file << container_conter;
+
+    container_conter++;
+  }
+  else
   {
-    cout << "crate [image] [container]" << endl;
+    cout << "create [image] [container]" << endl;
   }
 }
 void rm(int argc, char *argv[])
@@ -178,10 +183,11 @@ void rm(int argc, char *argv[])
     string tmpstr;
 
     tmpstr = "sudo umount containers/"+container+"/merged";
-    if(system(tmpstr.c_str())) return;
+    if(system(tmpstr.c_str())) ;
     tmpstr = "sudo rm -r containers/"+container;
-    if(system(tmpstr.c_str())) return;
-  }else
+    if(system(tmpstr.c_str())) ;
+  }
+  else
   {
     cout << "rm [container]" << endl;
   }
@@ -199,7 +205,8 @@ void ducker_init()
         info_file >> container_conter;
       }
     }
-  }else
+  }
+  else
   {
     container_conter = 0;
   }
@@ -215,6 +222,51 @@ void ducker_info_save()
   fstream info_file("./ducker.info");
   info_file << "container_conter " << container_conter << endl;
 }
+
+void exec(int argc, char *argv[])
+{
+  if (argc >= 4)
+  {
+    string container = argv[2];
+    string tmpstr;
+    stringstream ss;
+
+    int id;
+    fstream id_file("./containers/"+container+"/id");
+    id_file >> id;
+
+    for (size_t i = 3; i < argc; i++)
+    {
+      tmpstr += " ";
+      tmpstr += argv[i];
+    }
+    ss.str("");
+    ss << "mount -t proc none /proc \n";
+    ss << "mount -t sysfs none /sys \n";
+    ss << "mount -t tmpfs none /tmp \n";
+    ss << "source /etc/profile \n";
+    ss << "export PS1=\"(" << container << " container) \\u:\\w\\$ \" \n";
+    ss << "ip addr add 10.0.3." << (id+2) <<"/24 dev vethc-"<< (id)<<" \n";
+    ss << "ip link set vethc-"<< (id)<<" up \n";
+    ss << "ip route add default via 10.0.3.1 \n";
+    ss << tmpstr<< '\n';
+    ss << "bash -l\n";
+    fstream file("containers/"+container+"/merged/bin/container-exec.sh",ios::out);
+    file << ss.str();
+    file.sync();
+    file.close();
+    tmpstr = "sudo chmod +x ./containers/"+container+"/merged/bin/container-exec.sh";
+    system(tmpstr.c_str());
+    ss.str("");
+    ss << "sudo cgexec -g cpu:cpu_share_"<<id<<" -g memory:mem_share_"<<id<<" ip netns exec container-"<<container<<"-netns unshare -mpfu chroot containers/"<<container<<"/merged env -i HOME=/root TERM=\"$TERM\" container-exec.sh";
+    if(system(ss.str().c_str())) return;
+  }
+  else
+  {
+    cout << "exec [container] [command...]" << endl;
+  }
+}
+
 int main(int argc, char *argv[])
 {
   ducker_init();
@@ -228,16 +280,22 @@ int main(int argc, char *argv[])
     if (command == "help")
     {
       help();
-    }else if (command == "images")
+    }
+    else if (command == "images")
     {
       images();
-    }else if (command == "crate")
+    }
+    else if (command == "create")
     { 
-      crate(argc,argv);
+      create(argc,argv);
     }
     else if (command == "rm")
     { 
       rm(argc,argv);
+    }
+    else if (command == "exec")
+    { 
+      exec(argc,argv);
     }
     else
     {

@@ -1,4 +1,5 @@
 void help();
 void images();
-void crate(int argc, char *argv[]);
+void create(int argc, char *argv[]);
 void rm(int argc, char *argv[]);
+void exec(int argc, char *argv[]);
