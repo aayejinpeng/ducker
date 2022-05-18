@@ -83,6 +83,7 @@ void crate(int argc, char *argv[])
     string image = argv[2];
     string container = argv[3];
     string tmpstr;
+    stringstream ss;
     // overlay文件系统
     tmpstr = "mkdir containers/"+container;
     if(system(tmpstr.c_str())) return;
@@ -99,7 +100,7 @@ void crate(int argc, char *argv[])
     if(system(tmpstr.c_str())) return;
 
     // 网络设置
-    stringstream ss;
+    
     ss << "sudo ip link add vethc-" <<container_conter << " type veth peer name vethc-br-" << container_conter;
     
     system(ss.str().c_str());
@@ -122,8 +123,30 @@ void crate(int argc, char *argv[])
     ss.str("");
     ss << "sudo ip link set vethc-br-"<<container_conter<<" up";
     system(ss.str().c_str());
-    // cgroup设置
 
+    // cgroup设置
+    ss.str("");
+    ss << "sudo cgcreate -g cpu:cpu_share_" << container_conter;
+    system(ss.str().c_str());
+
+    ss.str("");
+    cout << "Cpu core size(double example: 2.7):" ;
+    double coresize = 1;
+    cin >> coresize;
+    ss << "sudo cgset -r cpu.cfs_quota_us="<< (unsigned long)(coresize*1024) <<" cpu_share_" << container_conter;
+    system(ss.str().c_str());
+
+    ss.str("");
+    ss << "sudo cgcreate -g memory:mem_share_" << container_conter;
+    system(ss.str().c_str());
+
+    ss.str("");
+    cout << "memory size(MB)(double example: 1024):" ;
+    double memory = 1024;
+    cin >> memory;
+    ss << "sudo cgset -r memory.limit_in_bytes="<< (unsigned long)(memory*1024) <<" mem_share_" << container_conter;
+    system(ss.str().c_str());
+    
     // init.sh
     ss.str("");
     ss << "mount -t proc none /proc \n";
@@ -140,6 +163,8 @@ void crate(int argc, char *argv[])
     tmpstr = "chmod +x ./containers/"+container+"/merged/bin/container-init.sh";
     system(tmpstr.c_str());
     container_conter++;//bug
+
+    
   }else
   {
     cout << "crate [image] [container]" << endl;
@@ -177,9 +202,9 @@ void ducker_init()
   }else
   {
     container_conter = 0;
-    system("sudo brctl addbr my-container-br ");
-    system("sudo ip addr add 10.0.3.1/24 dev my-container-br ");
   }
+  system("sudo brctl addbr my-container-br ");
+  system("sudo ip addr add 10.0.3.1/24 dev my-container-br ");
   system("sudo ip link set my-container-br up ");
   system("sudo iptables -t nat -A POSTROUTING -s 10.0.3.0/24 -j MASQUERADE ");
   system("sudo iptables -A FORWARD -o my-container-br -j ACCEPT ");
