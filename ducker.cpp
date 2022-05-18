@@ -1,6 +1,8 @@
 #include<string>
 #include<iostream>
 #include<vector>
+#include<cstdlib>
+#include<cstdio>
 #include"ducker.h"
 using namespace std;
 
@@ -54,8 +56,8 @@ struct command
 };
 
 vector<command>commands_list = {
-  {"help","Display ducker's commands infomation",(void *)help}
-
+  {"help","Display ducker's commands infomation",(void *)help},
+  {"images","List images",(void *)images}
 };
 void help()
 {
@@ -64,6 +66,10 @@ void help()
     cout<< commands_list[i].name << '\t' << commands_list[i].info << endl;
   }
   
+}
+void images()
+{
+  system("ls images");
 }
 int main(int argc, char *argv[])
 {
@@ -77,8 +83,10 @@ int main(int argc, char *argv[])
     if (command == "help")
     {
       help();
+    }else if (command == "images")
+    {
+      images();
     }
-    
     
   }
 }
