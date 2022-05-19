@@ -100,25 +100,25 @@ void create(int argc, char *argv[])
     tmpstr = "cp /etc/resolv.conf containers/"+container+"/merged/etc/resolv.conf";
     if(system(tmpstr.c_str())) return;
 
-    // 网络设置
+  // 网络设置
+    // 新建网线对vethc-id && vethc-bc-id
     ss.str("");
     ss << "sudo ip link add vethc-" <<container_conter << " type veth peer name vethc-br-" << container_conter;
     system(ss.str().c_str());
 
+    // 新建netns
     ss.str("");
     ss << "sudo ip netns add container-"<< container <<"-netns";
     system(ss.str().c_str());
 
+    //将新建的网线一端放入netns中
     ss.str("");
     ss << "sudo ip link set vethc-"<<container_conter<<" netns container-"<< container <<"-netns ";
     system(ss.str().c_str());
 
     ss.str("");
-    ss << "sudo ip link add vethc-" <<container_conter << " type veth peer name vethc-br-" << container_conter;
-    system(ss.str().c_str());
-
-    ss.str("");
-    ss << "sudo brctl addif my-container-br vethc-br-"<<container_conter;
+    // ip link set dev veth1 master br0
+    ss << "sudo ip link set dev vethc-br-"<<container_conter<<" master br0";
     system(ss.str().c_str());
 
     ss.str("");
@@ -134,7 +134,7 @@ void create(int argc, char *argv[])
     cout << "Cpu core size(double example: 2.7):" ;
     double coresize = 1;
     cin >> coresize;
-    ss << "sudo cgset -r cpu.cfs_quota_us="<< (unsigned long)(coresize*1024) <<" cpu_share_" << container_conter;
+    ss << "sudo cgset -r cpu.cfs_quota_us="<< (unsigned long)(coresize*100000) <<" cpu_share_" << container_conter;
     system(ss.str().c_str());
 
     ss.str("");
@@ -143,28 +143,28 @@ void create(int argc, char *argv[])
 
     ss.str("");
     cout << "memory size(MB)(double example: 1024):" ;
-    double memory = 1024;
+    double memory = 1024*1024;
     cin >> memory;
-    ss << "sudo cgset -r memory.limit_in_bytes="<< (unsigned long)(memory*1024) <<" mem_share_" << container_conter;
+    ss << "sudo cgset -r memory.limit_in_bytes="<< (unsigned long)(memory*1024*1024) <<" mem_share_" << container_conter;
     system(ss.str().c_str());
     
-    // init.sh
-    ss.str("");
-    ss << "mount -t proc none /proc \n";
-    ss << "mount -t sysfs none /sys \n";
-    ss << "mount -t tmpfs none /tmp \n";
-    ss << "source /etc/profile \n";
-    ss << "export PS1=\"(" << container << " container) \\u:\\w\\$ \" \n";
-    ss << "ip addr add 10.0.3." << (container_conter+2) <<"/24 dev vethc-"<< (container_conter)<<" \n";
-    ss << "ip link set vethc-"<< (container_conter)<<" up \n";
-    ss << "ip route add default via 10.0.3.1 \n";
-    ss << "bash -l\n";
-    fstream file("./containers/"+container+"/merged/bin/container-init.sh",ios::out);
-    file << ss.str();
-    tmpstr = "chmod +x ./containers/"+container+"/merged/bin/container-init.sh";
-    system(tmpstr.c_str());
+    // // init.sh
+    // ss.str("");
+    // ss << "mount -t proc none /proc \n";
+    // ss << "mount -t sysfs none /sys \n";
+    // ss << "mount -t tmpfs none /tmp \n";
+    // ss << "source /etc/profile \n";
+    // ss << "export PS1=\"(" << container << " container) \\u:\\w\\$ \" \n";
+    // // ss << "ip addr add 10.0.3." << (container_conter+2) <<"/24 dev vethc-"<< (container_conter)<<" \n";
+    // // ss << "ip link set vethc-"<< (container_conter)<<" up \n";
+    // // ss << "ip route add default via 10.0.3.1 \n";
+    // ss << "bash -l\n";
+    // fstream file("./containers/"+container+"/merged/bin/container-init.sh",ios::out);
+    // file << ss.str();
+    // tmpstr = "chmod +x ./containers/"+container+"/merged/bin/container-init.sh";
+    // system(tmpstr.c_str());
 
-    cout << "container = " << container << "\nip = 10.0.3." << (container_conter+2) << "/24" << endl;
+    cout << "container = " << container << "\nip = 10.0.5." << (container_conter+2) << "/24" << endl;
     fstream id_file("./containers/"+container+"/id",ios::out);
     id_file << container_conter;
 
@@ -210,12 +210,13 @@ void ducker_init()
   {
     container_conter = 0;
   }
-  system("sudo brctl addbr my-container-br ");
-  system("sudo ip addr add 10.0.3.1/24 dev my-container-br ");
-  system("sudo ip link set my-container-br up ");
-  system("sudo iptables -t nat -A POSTROUTING -s 10.0.3.0/24 -j MASQUERADE ");
-  system("sudo iptables -A FORWARD -o my-container-br -j ACCEPT ");
-  system("sudo iptables -A FORWARD -i my-container-br -j ACCEPT");
+  
+  system("sudo ip link add name br0 type bridge");
+  system("sudo ip addr add 10.0.5.1/24 dev br0 ");
+  system("sudo ip link set dev br0 up ");
+  // system("sudo iptables -t nat -A POSTROUTING -s 10.0.5.0/24 -j MASQUERADE ");
+  system("sudo iptables -A FORWARD -o br0 -j ACCEPT ");
+  system("sudo iptables -A FORWARD -i br0 -j ACCEPT");
 }
 void ducker_info_save()
 {
@@ -240,20 +241,32 @@ void exec(int argc, char *argv[])
       tmpstr += " ";
       tmpstr += argv[i];
     }
+
+    ss.str("");
+    // ss << "sudo ip netns exec container-"<<container<<"-netns ip link set dev vethc-"<<id<<" name eth"<<id<<endl;
+    system(ss.str().c_str());
+    
+    ss.str("");
+    ss << "sudo ip netns exec container-"<<container<<"-netns ip addr add 10.0.5."<<(id+2)<<"/24 dev vethc-"<< (id)<<endl;
+    system(ss.str().c_str());
+
+    ss.str("");
+    ss << "sudo ip netns exec container-"<<container<<"-netns ip link set dev vethc-"<<id<< " up" <<endl;
+    system(ss.str().c_str());
     ss.str("");
     ss << "mount -t proc none /proc \n";
     ss << "mount -t sysfs none /sys \n";
     ss << "mount -t tmpfs none /tmp \n";
     ss << "source /etc/profile \n";
     ss << "export PS1=\"(" << container << " container) \\u:\\w\\$ \" \n";
-    ss << "ip addr add 10.0.3." << (id+2) <<"/24 dev vethc-"<< (id)<<" \n";
-    ss << "ip link set vethc-"<< (id)<<" up \n";
-    ss << "ip route add default via 10.0.3.1 \n";
+    // ss << "ip addr add 10.0.3." << (id+2) <<"/24 dev vethc-"<< (id)<<" \n";
+    // ss << "ip link set vethc-"<< (id)<<" up \n";
+    ss << "ip route add default via 10.0.5.1 \n";
     ss << tmpstr<< '\n';
     ss << "bash -l\n";
     fstream file("containers/"+container+"/merged/bin/container-exec.sh",ios::out);
     file << ss.str();
-    file.sync();
+    // file.sync();
     file.close();
     tmpstr = "sudo chmod +x ./containers/"+container+"/merged/bin/container-exec.sh";
     system(tmpstr.c_str());
