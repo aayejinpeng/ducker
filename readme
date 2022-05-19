@@ -19,6 +19,7 @@
     {"create","Create a new container","create [image] [container]",(void *)create},
     {"rm","Remove one container","rm [container]",(void *)rm},
     {"exec","Run a command in a running container","exec [container] [command...]",(void *)exec}
----todo---
-    还可以再实现一些docker的命令
-    完成验证和实验报告
+---report---
+    实验报告在repot目录下，还需要再添加一些别的信息
+---test---
+    test目录是一些测试工具
